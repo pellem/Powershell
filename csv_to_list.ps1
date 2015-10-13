@@ -1,3 +1,12 @@
+#title           :csv_to_list.ps1
+#description     :Will upload a .csv file to a list on a Sharepoint server.
+#author		 :GordonAmable
+#date            :13/10/2015
+#version         :0.1    
+#usage		 :./csv-to-list.ps1
+#notes           :Need Sharepoint 2013 CSOM librairies.
+#==============================================================================
+
 #PARAMS
 $SiteURL = "https://ChangeMe.sharepoint.com/" <-- MODIFY
 $ListTitle = "ChangeMe" <-- MODIFY
