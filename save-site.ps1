@@ -3,33 +3,33 @@
 #description     :Will save as .csv all lists + all fields for each list found on a Sharepoint site
 #author		 :GordonAmable
 #date            :20/10/2015
-#version         :0.1    
+#version         :0.4    
 #usage		 :./save-site.ps1
 #notes           :Need Sharepoint 2013 CSOM librairies.
 #==============================================================================
 
 #################################################################################################################################
-                                             ##           PART THAT MAY BE CHANGED         ##
+                                             ##           VARIABLES REQUISES         ##
 #################################################################################################################################
 
 
 
-#Harvesting user credentials
+#Récupération des données utilisateur
 $Username = Read-Host -Prompt "User"
-$SiteURL = "[example.sharepoint.com]"
+$SiteURL = "https://johndoe.sharepoint.com/"     #Modify with your own site
 
 
-#Loading CSOM libs -- paths may change for every computer
+#Chargement des librairies Sharepoint 2013 CSOM -- Peut-être à modifier pour chaque nouvelle machine
 Add-Type -Path "c:\Program Files\Common Files\microsoft shared\Web Server Extensions\15\ISAPI\Microsoft.SharePoint.Client.dll"
 Add-Type -Path "c:\Program Files\Common Files\microsoft shared\Web Server Extensions\15\ISAPI\Microsoft.SharePoint.Client.Runtime.dll"
 
 
 #################################################################################################################################
-                                             ##           FUNCTIONS         ##
+                                             ##           FONCTIONS         ##
 #################################################################################################################################
 
 
-function Epur_URL #Save URL without any "https://" nor ".com/". Replace "." by "_"
+function Epur_URL #Renvoie l'URL du site sans "https://" ni ".com/". Remplace les "." par "_"
 {
 $clearURL = $SiteURL
 $clearURL = $SiteURL.Remove(0,8)
@@ -41,7 +41,7 @@ Write-Output $clearURL
 }
 
 
-function Connect_to_Sharepoint #Create ClientContext
+function Connect_to_Sharepoint #Crée le contexte de connexion au sharepoint et le stocke dans une globale
 {
  param (
   [Parameter(Mandatory=$true,Position=1)]
@@ -57,13 +57,12 @@ function Connect_to_Sharepoint #Create ClientContext
 $global:ctx=$ctx
 }
 
-# ? This global is called here to be placed on the stack ? Or just defined ?
 $global:ctx
 
 
 
-							 
-function Get-SPOList 	  #Returns all list found on site on the pipeline with Write-Output 	
+					  #Renvoie toutes les listes trouvées via Write-Output -- Write-Output envoie les objets spécifiés sur le pipeline.				 
+function Get-SPOList  #Si il n'y a pas de commande qui suit Write-Output, les objets sont affichés dans la console. 
 {
   
    param (
@@ -157,7 +156,7 @@ function Get-SPOList 	  #Returns all list found on site on the pipeline with Wri
 
 
 
-function Get-SPOListFields #Create and returns an object with all informations contained in a field
+function Get-SPOListFields #Renvoie un objet par champs présent dans liste.
 {
  param (
         [Parameter(Mandatory=$true,Position=3)]
@@ -205,7 +204,7 @@ function Get-SPOListFields #Create and returns an object with all informations c
 
 
   
-function Get-SPOListItems #Creates and return an array with all fields found in a list
+function Get-SPOListItems #Renvoie un tableau contenant tous les objets (contenant chaque champs) pour la liste passée en paramètres
 {
   
    param (
@@ -245,7 +244,7 @@ $spqQuery.ViewXml ="<View Scope='RecursiveAll' />";
 
   for($j=0;$j -lt $itemki.Count ;$j++)
   {
-        Write-Progress -id 2 -Activity "Getting all fields..." -Status "pour: $ListTitle..." -percentComplete ($j*(100/$itemki.Count));
+        Write-Progress -id 2 -Activity "Récupération des champs..." -Status "pour: $ListTitle..." -percentComplete ($j*(100/$itemki.Count));
         $obj = New-Object PSObject
         
 #        if($IncludeAllProperties)
@@ -290,34 +289,34 @@ $spqQuery.ViewXml ="<View Scope='RecursiveAll' />";
 clear
 
 
-#Connecting to sharepoint
+#On se connecte au site sharepoint grâce à la fonction Connect_to_Sharepoint
 Connect_to_Sharepoint $Username $SiteURL;
 
 
 
-#Create "clean" URL
+#On récupère l'URL épurée (pour générer les path des fichiers de sortie)
 $clearURL = Epur_URL
 
 
 
-#Get all lists
+#On récupère toutes les listes grâce à la fonction Get-SPOList
 $AllLists = Get-SPOList;
 
 
 
-#Check if "clean" URL + "save" folder exists. If no, we create it
+#On check si un dossier au nom de l'URL épurée suivi de "save" existe. Si non, on le crée
 $save_dir = $clearURL + "save"
 $save_dir_path = ".\" + $save_dir
 If (-not (Test-Path $save_dir)) { New-Item -ItemType Directory -Name $save_dir }
 
 
 
-#Create a .csv with all lists found on site
+#On crée un .csv qui contient toutes les listes trouvées sur le sharepoint
 $AllLists | export-csv -Path $save_dir_path\lists.csv -Encoding unicode;
 
 
 
-#Get all lists in a variable
+#On stocke toutes les listes dans la variable $listItems
 $listItems = import-csv -Path $save_dir_path\lists.csv
 
 	$recordCount = @($listItems).count;
@@ -328,11 +327,10 @@ for($rowCounter = 0; $rowCounter -le $recordCount - 1; $rowCounter++)
 			$tab_lists += ($curItem.Title)
 	}
 
-for($index = 1; $index -le $recordCount; $index++) #While index < number of lists
+for($index = 1; $index -le $recordCount; $index++) #Tant que index < nombre de listes à traiter
 {
-		    Write-Progress -id 1 -activity "Saving..." -status "(liste n°$index sur $recordCount)" -percentComplete ($index*(100/$recordCount));
-			$tab_items=@() #For each loop, we create/reset $tab_items as an empty array
-			$tab_items = Get-SPOListItems $tab_lists[$index]; #Fill it with object returned by Get-SPOListItems
-			$tab_path = $save_dir_path + "\" + $tab_lists[$index] +".csv" #We create a path for each list
-			$tab_items | export-csv -Path $tab_path -Encoding unicode; #Export
+		    Write-Progress -id 1 -activity "Sauvegarde en cours..." -status "(liste n°$index sur $recordCount)" -percentComplete ($index*(100/$recordCount));
+			$tab_items=@() #A chaque itération, on crée/reset $tab_items en tant que tableau vide
+			$tab_items = Get-SPOListItems $tab_lists[$index]; #On le remplit avec l'objet retourné par Get-SPOListItems
+			$tab_path = $save_dir_path + "\" + $tab_lists[$index].replace(' ','_') +".csv" #On crée un path pour chaque liste			$tab_items | export-csv -Path $tab_path -Encoding unicode; #On exporte
 }
